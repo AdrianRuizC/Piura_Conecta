@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-utp-red: #C8102E;
+  --color-utp-dark: #1a1a1a;
+  --color-utp-light: #f3f4f6;
+}
+
+body {
+  background-color: var(--color-utp-light);
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
