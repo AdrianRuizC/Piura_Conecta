@@ -28,20 +28,19 @@ const directorioMateriales = path.join(__dirname, 'uploads', 'materiales');
 if (!fs.existsSync(directorioVideos)) fs.mkdirSync(directorioVideos, { recursive: true });
 if (!fs.existsSync(directorioMateriales)) fs.mkdirSync(directorioMateriales, { recursive: true });
 
+const generarNombreArchivo = (_peticion, archivo, callback) => {
+  const sufijoUnico = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  callback(null, `${sufijoUnico}${path.extname(archivo.originalname)}`);
+};
+
 const almacenamientoVideos = multer.diskStorage({
   destination: (_peticion, _archivo, callback) => callback(null, directorioVideos),
-  filename: (_peticion, archivo, callback) => {
-    const sufijoUnico = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    callback(null, `${sufijoUnico}${path.extname(archivo.originalname)}`);
-  }
+  filename: generarNombreArchivo
 });
 
 const almacenamientoMateriales = multer.diskStorage({
   destination: (_peticion, _archivo, callback) => callback(null, directorioMateriales),
-  filename: (_peticion, archivo, callback) => {
-    const sufijoUnico = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    callback(null, `${sufijoUnico}${path.extname(archivo.originalname)}`);
-  }
+  filename: generarNombreArchivo
 });
 
 const cargaVideos = multer({ storage: almacenamientoVideos });

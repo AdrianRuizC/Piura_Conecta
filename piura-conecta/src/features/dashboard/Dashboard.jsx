@@ -9,6 +9,7 @@ const modulosFallback = [
   { id: 4, icono: '💬', titulo: 'Foro Local', descripcion: 'Consultas en red', colores: 'bg-purple-100 text-purple-700', borde: 'hover:border-purple-300', ruta: '/foro' },
   { id: 5, icono: '📊', titulo: 'Progreso', descripcion: 'Avance personal', colores: 'bg-yellow-100 text-yellow-700', borde: 'hover:border-yellow-300', ruta: '/progreso' },
   { id: 6, icono: '📥', titulo: 'Descargas', descripcion: 'Gestor offline', colores: 'bg-gray-200 text-gray-700', borde: 'hover:border-gray-400', ruta: '/descargas' },
+  {id: 7, icono: '👤', titulo: 'Usuarios', descripcion: 'Gestión de usuarios', colores: 'bg-pink-100 text-pink-700', borde: 'hover:border-pink-300', ruta: '/usuarios'},
 ];
 
 

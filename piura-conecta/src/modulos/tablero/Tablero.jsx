@@ -1,45 +1,130 @@
-// No React import required (JSX transform)
-import { Link } from 'react-router-dom'; // Importamos el componente de navegación
-
-// Agregamos la propiedad 'ruta' a cada objeto
-const listaDeModulos = [
-  { id: 1, icono: '📚', titulo: 'Materiales', descripcion: 'Descarga de PDFs', colores: 'bg-blue-100 text-blue-700', borde: 'hover:border-blue-300', ruta: '/materiales' },
-  { id: 2, icono: '🎬', titulo: 'Videos', descripcion: 'Educación offline', colores: 'bg-utp-red/10 text-utp-red', borde: 'hover:border-utp-red/40', ruta: '/videos' },
-  { id: 3, icono: '📝', titulo: 'Exámenes', descripcion: 'Práctica local', colores: 'bg-green-100 text-green-700', borde: 'hover:border-green-300', ruta: '/examenes' },
-  { id: 4, icono: '💬', titulo: 'Foro Local', descripcion: 'Consultas en red', colores: 'bg-purple-100 text-purple-700', borde: 'hover:border-purple-300', ruta: '/foro' },
-  { id: 5, icono: '📊', titulo: 'Progreso', descripcion: 'Avance personal', colores: 'bg-yellow-100 text-yellow-700', borde: 'hover:border-yellow-300', ruta: '/progreso' },
-  { id: 6, icono: '📥', titulo: 'Descargas', descripcion: 'Gestor offline', colores: 'bg-gray-200 text-gray-700', borde: 'hover:border-gray-400', ruta: '/descargas' },
-];
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function Tablero() {
-  return (
-    <div className="container mx-auto px-4 py-12 max-w-6xl">
-      <header className="text-center mb-16">
-        <h2 className="text-4xl md:text-5xl font-extrabold text-utp-dark mb-5 tracking-tight">
-          Educación Digital <span className="text-utp-red">Offline</span>
-        </h2>
-        <p className="text-gray-600 max-w-2xl mx-auto text-lg leading-relaxed">
-          Acceso inmediato a recursos educativos a través de la red LAN autónoma. 
-          Cero consumo de datos, máxima velocidad local.
-        </p>
-      </header>
+  const modulos = [
+    { 
+      id: 1, 
+      titulo: 'Materiales de Estudio', 
+      descripcion: 'Accede a libros, manuales agrícolas y guías en formato PDF.', 
+      icono: '📚', 
+      bgIcono: 'bg-blue-100', 
+      txtIcono: 'text-blue-600',
+      ruta: '/materiales' 
+    },
+    { 
+      id: 2, 
+      titulo: 'Videoteca Educativa', 
+      descripcion: 'Clases completas y tutoriales paso a paso sin gastar datos.', 
+      icono: '🎬', 
+      bgIcono: 'bg-red-100', 
+      txtIcono: 'text-red-600',
+      ruta: '/videos' 
+    },
+    { 
+      id: 3, 
+      titulo: 'Centro de Exámenes', 
+      descripcion: 'Pon a prueba tus conocimientos con simulacros y quices.', 
+      icono: '📝', 
+      bgIcono: 'bg-emerald-100', 
+      txtIcono: 'text-emerald-600',
+      ruta: '/examenes' 
+    },
+    { 
+      id: 4, 
+      titulo: 'Foro Comunitario', 
+      descripcion: 'Comparte dudas, experiencias y soluciones con tu comunidad.', 
+      icono: '💬', 
+      bgIcono: 'bg-purple-100', 
+      txtIcono: 'text-purple-600',
+      ruta: '/foro' 
+    },
+    { 
+      id: 5, 
+      titulo: 'Mi Progreso', 
+      descripcion: 'Revisa tus calificaciones y el avance de tu aprendizaje.', 
+      icono: '📈', 
+      bgIcono: 'bg-amber-100', 
+      txtIcono: 'text-amber-600',
+      ruta: '/progreso' 
+    },
+    { 
+      id: 6, 
+      titulo: 'Gestor de Descargas', 
+      descripcion: 'Administra tus archivos guardados para uso 100% offline.', 
+      icono: '📥', 
+      bgIcono: 'bg-gray-100', 
+      txtIcono: 'text-gray-600',
+      ruta: '/descargas' 
+    }
+  ];
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8 max-w-5xl mx-auto">
-        {listaDeModulos.map((modulo) => (
-          // Cambiamos <button> por <Link to={...}>
+  return (
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+      
+      {/* BANNER HERO ESTILO UDEMY/PLATZI */}
+      <div className="bg-gray-900 rounded-2xl overflow-hidden mb-12 relative shadow-2xl">
+        {/* Decoraciones de fondo abstracto */}
+        <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-[#c31f26] rounded-full mix-blend-multiply filter blur-3xl opacity-40"></div>
+        <div className="absolute bottom-0 left-0 -mb-16 -ml-16 w-64 h-64 bg-blue-600 rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
+        
+        <div className="relative z-10 p-8 md:p-12 lg:p-16">
+          <span className="text-red-400 font-bold tracking-wider uppercase text-sm mb-2 block">
+            Red Educativa Local
+          </span>
+          <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
+            Educación Digital <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-red-600">Offline</span>
+          </h1>
+          <p className="text-gray-300 text-lg md:text-xl max-w-2xl font-light mb-8 leading-relaxed">
+            Acceso inmediato a recursos educativos a través de la red LAN autónoma. Cero consumo de datos, máxima velocidad en tu comunidad.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <Link to="/videos" className="bg-[#c31f26] hover:bg-red-700 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg hover:shadow-red-900/50">
+              Continuar Aprendiendo
+            </Link>
+            <Link to="/materiales" className="bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-8 rounded-xl backdrop-blur-sm transition-all border border-white/10">
+              Explorar Biblioteca
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* SECCIÓN DE MÓDULOS */}
+      <div className="mb-6 flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">¿Qué quieres hacer hoy?</h2>
+          <p className="text-gray-500 mt-1">Selecciona una herramienta de aprendizaje</p>
+        </div>
+      </div>
+
+      {/* GRID DE TARJETAS (ESTILO KHAN ACADEMY) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {modulos.map((mod) => (
           <Link 
-            key={modulo.id}
-            to={modulo.ruta} 
-            className={`bg-white border-2 border-transparent rounded-2xl p-8 flex flex-col items-center justify-center text-center shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group ${modulo.borde}`}
+            key={mod.id} 
+            to={mod.ruta}
+            className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl hover:border-gray-300 transition-all duration-300 hover:-translate-y-1 group flex flex-col"
           >
-            <div className={`text-5xl mb-5 p-5 rounded-full ${modulo.colores} group-hover:scale-110 transition-transform duration-300 ease-out shadow-inner`}>
-              {modulo.icono}
+            <div className="flex items-start justify-between mb-4">
+              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${mod.bgIcono} ${mod.txtIcono} group-hover:scale-110 transition-transform duration-300`}>
+                {mod.icono}
+              </div>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+              </div>
             </div>
-            <h3 className="font-bold text-gray-900 text-xl mb-2">{modulo.titulo}</h3>
-            <p className="text-base text-gray-500 font-medium">{modulo.descripcion}</p>
+            
+            <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-[#c31f26] transition-colors">
+              {mod.titulo}
+            </h3>
+            
+            <p className="text-gray-500 text-sm leading-relaxed flex-grow">
+              {mod.descripcion}
+            </p>
           </Link>
         ))}
       </div>
+
     </div>
   );
 }
