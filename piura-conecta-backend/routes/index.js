@@ -1,11 +1,10 @@
-const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/database');
 const { cargaVideos, cargaMateriales } = require('../utils/storage');
-const { validarRolControl, verificarToken } = require('../middleware/auth');
+const { validarRolControl, verificarToken, requerirAutenticacion } = require('../middleware/auth');
 const { JWT_SECRET } = require('../config/env');
 
 const registrarRutas = (aplicacion, io = null) => {
@@ -43,7 +42,7 @@ const registrarRutas = (aplicacion, io = null) => {
 
         if (!valido) return respuesta.status(401).json({ error: 'Credenciales inválidas' });
 
-        const payload = { id: user.id, rol: user.rol, tenant_id: user.tenant_id || null };
+        const payload = { id: user.id, rol: user.rol, tenant_id: user.tenant_id || null, nombre_completo: user.nombre_completo };
         const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
         respuesta.json({ token, user: { id: user.id, nombre_completo: user.nombre_completo, rol: user.rol, tenant_id: user.tenant_id } });
       } else {
@@ -232,12 +231,23 @@ const registrarRutas = (aplicacion, io = null) => {
     try {
       let rows;
       try {
-        const res = await pool.query('SELECT id, titulo, autor, fecha, video_id, timestamp FROM foro ORDER BY id DESC');
+        const res = await pool.query(`
+          SELECT f.id, f.titulo, f.autor, f.fecha, f.video_id, f.timestamp,
+            COUNT(r.id)::int AS replies,
+            MAX(r.creado_at) AS last_reply_at
+          FROM foro f
+          LEFT JOIN foro_respuestas r ON r.foro_id = f.id
+          GROUP BY f.id
+          ORDER BY COALESCE(MAX(r.creado_at), f.fecha) DESC
+        `);
         rows = res.rows;
       } catch (qerr) {
-        // fallback for older schema
-        const res2 = await pool.query('SELECT id, titulo, autor, fecha FROM foro ORDER BY id DESC');
-        rows = res2.rows.map(r => ({ ...r, video_id: null, timestamp: null }));
+        if (qerr.code === '42P01' || qerr.code === '42703') {
+          const res2 = await pool.query('SELECT id, titulo, autor, fecha FROM foro ORDER BY id DESC');
+          rows = res2.rows.map(r => ({ ...r, video_id: null, timestamp: null, replies: 0, last_reply_at: null }));
+        } else {
+          throw qerr;
+        }
       }
       respuesta.json(rows);
     } catch (error) {
@@ -270,8 +280,8 @@ const registrarRutas = (aplicacion, io = null) => {
 
   aplicacion.post('/api/foro', verificarToken, async (peticion, respuesta) => {
     try {
-      const { titulo, video_id, timestamp } = peticion.body;
-      const autor = (peticion.user && peticion.user.nombre_completo) || peticion.body.autor || null;
+      const { titulo, video_id, timestamp, autor: autorBody } = peticion.body;
+      const autor = (peticion.user && peticion.user.nombre_completo) || autorBody || null;
       // try to store video context if schema supports it
       try {
         const { rows } = await pool.query('INSERT INTO foro (titulo, autor, video_id, timestamp) VALUES ($1, $2, $3, $4) RETURNING *', [titulo, autor || null, video_id || null, timestamp || null]);
@@ -298,8 +308,8 @@ const registrarRutas = (aplicacion, io = null) => {
   aplicacion.post('/api/foro/:id/responder', verificarToken, async (peticion, respuesta) => {
     try {
       const { id } = peticion.params;
-      const { contenido } = peticion.body;
-      const autor = (peticion.user && peticion.user.nombre_completo) || peticion.body.autor || null;
+      const { contenido, autor: autorBody } = peticion.body;
+      const autor = (peticion.user && peticion.user.nombre_completo) || autorBody || null;
       try {
         const { rows } = await pool.query('INSERT INTO foro_respuestas (foro_id, autor, contenido) VALUES ($1,$2,$3) RETURNING *', [id, autor || null, contenido || null]);
         const created = rows[0];
@@ -320,7 +330,27 @@ const registrarRutas = (aplicacion, io = null) => {
     }
   });
 
-  aplicacion.delete('/api/foro/:id', verificarToken, async (peticion, respuesta) => {
+  aplicacion.delete('/api/foro/:id/responder/:respuestaId', requerirAutenticacion, async (peticion, respuesta) => {
+    try {
+      const { id, respuestaId } = peticion.params;
+      const actor = peticion.user || null;
+      const esControl = actor && (actor.rol === 'admin' || actor.rol === 'profesor');
+
+      const replyRes = await pool.query('SELECT id, foro_id, autor FROM foro_respuestas WHERE id = $1 AND foro_id = $2', [respuestaId, id]);
+      if (replyRes.rows.length === 0) return respuesta.status(404).json({ error: 'Respuesta no encontrada' });
+      const reply = replyRes.rows[0];
+      const esAutor = actor && reply.autor && String(reply.autor) === String(actor.nombre_completo);
+      if (!esControl && !esAutor) return respuesta.status(403).json({ error: 'No autorizado' });
+
+      await pool.query('DELETE FROM foro_respuestas WHERE id = $1', [respuestaId]);
+      return respuesta.json({ mensaje: 'Respuesta eliminada' });
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: error.message || 'Error al eliminar respuesta' });
+    }
+  });
+
+  aplicacion.delete('/api/foro/:id', requerirAutenticacion, async (peticion, respuesta) => {
     try {
       const { id } = peticion.params;
       // check ownership or role
@@ -479,7 +509,7 @@ const registrarRutas = (aplicacion, io = null) => {
     }
   });
 
-  aplicacion.post('/api/examenes/:id/submit', verificarToken, cargaMateriales.single('archivo'), async (peticion, respuesta) => {
+  aplicacion.post('/api/examenes/:id/submit', requerirAutenticacion, cargaMateriales.single('archivo'), async (peticion, respuesta) => {
     try {
       const examenId = Number(peticion.params.id);
       const alumno = peticion.user || null;
@@ -489,7 +519,16 @@ const registrarRutas = (aplicacion, io = null) => {
 
       if (examen.tipo === 'quiz') {
         const respuestasRaw = peticion.body.respuestas;
-        const respuestas = typeof respuestasRaw === 'string' ? JSON.parse(respuestasRaw) : (respuestasRaw || {});
+        let respuestas = {};
+        if (typeof respuestasRaw === 'string') {
+          try {
+            respuestas = JSON.parse(respuestasRaw);
+          } catch (err) {
+            return respuesta.status(400).json({ error: 'Formato de respuestas inválido' });
+          }
+        } else {
+          respuestas = respuestasRaw || {};
+        }
         const preguntas = examen.contenido && examen.contenido.preguntas ? examen.contenido.preguntas : [];
         let correctas = 0;
         preguntas.forEach((p) => {
@@ -553,7 +592,7 @@ const registrarRutas = (aplicacion, io = null) => {
     }
   });
 
-  aplicacion.get('/api/mis-submissions', verificarToken, async (peticion, respuesta) => {
+  aplicacion.get('/api/mis-submissions', requerirAutenticacion, async (peticion, respuesta) => {
     try {
       const usuario = peticion.user;
       if (!usuario || !usuario.id) return respuesta.status(401).json({ error: 'No autenticado' });
@@ -593,7 +632,7 @@ const registrarRutas = (aplicacion, io = null) => {
   });
 
   // Guardar progreso periódico (upsert)
-  aplicacion.post('/api/progreso', verificarToken, async (peticion, respuesta) => {
+  aplicacion.post('/api/progreso', requerirAutenticacion, async (peticion, respuesta) => {
     try {
       const usuario = peticion.user;
       const { video_id, tiempo_segundos } = peticion.body;
@@ -621,7 +660,7 @@ const registrarRutas = (aplicacion, io = null) => {
   });
 
   // Crear attempt parcial para examen
-  aplicacion.post('/api/examenes/:id/attempts', verificarToken, async (peticion, respuesta) => {
+  aplicacion.post('/api/examenes/:id/attempts', requerirAutenticacion, async (peticion, respuesta) => {
     try {
       const examenId = Number(peticion.params.id);
       const usuario = peticion.user || null;
@@ -636,7 +675,7 @@ const registrarRutas = (aplicacion, io = null) => {
   });
 
   // Responder una pregunta dentro de un attempt (validación por pregunta)
-  aplicacion.post('/api/examenes/:id/attempts/:submissionId/question/:questionId', verificarToken, async (peticion, respuesta) => {
+  aplicacion.post('/api/examenes/:id/attempts/:submissionId/question/:questionId', requerirAutenticacion, async (peticion, respuesta) => {
     try {
       const examenId = Number(peticion.params.id);
       const submissionId = Number(peticion.params.submissionId);

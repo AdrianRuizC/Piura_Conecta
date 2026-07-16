@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { apiService, URL_SERVIDOR } from '../../servicios/api';
 
 export default function Videos({ rolUsuario }) {
@@ -10,6 +10,8 @@ export default function Videos({ rolUsuario }) {
   const [mensajeError, setMensajeError] = useState('');
   const [mensajeExito, setMensajeExito] = useState('');
   const [cargando, setCargando] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState(null);
+  const usuarioActual = apiService.obtenerUsuario();
 
   const esRolControl = ['admin', 'profesor'].includes(rolUsuario);
 
@@ -38,6 +40,17 @@ export default function Videos({ rolUsuario }) {
 
   // refs registry for player instances to support seeking from foro
   const playerRefs = useRef({});
+  const registerRef = useCallback((id, refObj) => {
+    playerRefs.current[id] = refObj;
+  }, []);
+
+  const abrirVideoGrande = (video) => {
+    setSelectedVideo(video);
+    setMensajeError('');
+    setMensajeExito('');
+  };
+  const cerrarVideoGrande = () => setSelectedVideo(null);
+
   useEffect(() => {
     const handler = (ev) => {
       try {
@@ -73,10 +86,6 @@ export default function Videos({ rolUsuario }) {
     formularioDatos.append('titulo', tituloVideo.trim());
     formularioDatos.append('curso_id', cursoSeleccionado);
     formularioDatos.append('archivo', archivoVideo);
-    // Debug: listar contenido del FormData
-    for (const pair of formularioDatos.entries()) {
-      console.log('formdata', pair[0], pair[1]);
-    }
 
     setCargando(true);
     try {
@@ -118,126 +127,205 @@ export default function Videos({ rolUsuario }) {
   return (
     <div className="container mx-auto px-4 py-10 max-w-6xl">
       <header className="mb-8">
-        <h2 className="text-3xl font-extrabold text-utp-dark">Biblioteca de videos</h2>
-        <p className="text-gray-600 mt-2">
-          {esRolControl
-            ? 'Publica y gestiona el material audiovisual disponible en la red local.'
-            : 'Tu acceso es de lectura para revisar el contenido disponible.'}
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-3xl font-extrabold text-utp-dark">Biblioteca de videos</h2>
+            <p className="text-gray-600 mt-2 max-w-2xl">
+              {esRolControl
+                ? 'Publica, gestiona y organiza videos para tus estudiantes. Crea dudas directamente desde el reproductor y fusiona el contenido con el foro.'
+                : 'Reproduce las clases disponibles y consulta dudas vinculadas al minuto exacto del video.'}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-sm uppercase tracking-[0.2em] text-gray-500">Videos</p>
+              <p className="mt-2 text-3xl font-bold text-utp-dark">{videos.length}</p>
+            </div>
+            <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+              <p className="text-sm uppercase tracking-[0.2em] text-gray-500">Acción</p>
+              <p className="mt-2 text-lg font-semibold text-gray-900">{esRolControl ? 'Publica y administra' : 'Explora y participa'}</p>
+            </div>
+          </div>
+        </div>
       </header>
 
       {mensajeError && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-6 rounded-3xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700 shadow-sm">
           {mensajeError}
         </div>
       )}
 
       {mensajeExito && (
-        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div className="mb-6 rounded-3xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700 shadow-sm">
           {mensajeExito}
         </div>
       )}
 
-      <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-        {esRolControl && (
-          <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Subir nuevo video</h3>
-            <form onSubmit={manejarSubida} className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Título</label>
-                <input
-                  type="text"
-                  className="w-full rounded-xl border border-gray-200 p-3 outline-none focus:border-utp-red"
-                  value={tituloVideo}
-                  onChange={(evento) => setTituloVideo(evento.target.value)}
-                  placeholder="Ej. Clase de matemáticas"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Curso</label>
-                <select
-                  className="w-full rounded-xl border border-gray-200 p-3 outline-none focus:border-utp-red"
-                  value={cursoSeleccionado}
-                  onChange={(evento) => setCursoSeleccionado(evento.target.value)}
-                >
-                  {cursos.map((curso) => (
-                    <option key={curso.id} value={curso.id}>{curso.nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Archivo MP4</label>
-                <input
-                  type="file"
-                  accept="video/mp4"
-                  className="w-full rounded-xl border border-dashed border-gray-300 p-3 text-sm"
-                  onChange={(evento) => setArchivoVideo(evento.target.files?.[0] || null)}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={cargando}
-                className="w-full rounded-xl bg-utp-dark px-4 py-3 font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-gray-500"
-              >
-                {cargando ? 'Subiendo...' : 'Publicar video'}
-              </button>
-            </form>
-          </section>
-        )}
-
-        <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-200">
-          <h3 className="text-xl font-bold text-gray-900 mb-4">Videos disponibles</h3>
-          <div className="space-y-3">
-            {videos.length === 0 ? (
-              <p className="text-sm text-gray-500">Aún no hay videos publicados.</p>
-            ) : (
-              videos.map((video) => (
-                <div key={video.id} className="rounded-xl border border-gray-200 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-gray-900">{video.titulo}</p>
-                      <p className="text-sm text-gray-500">{video.curso}</p>
+      <div className="grid gap-8 lg:grid-cols-[0.95fr_0.8fr]">
+        <section className="space-y-6">
+          {videos.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-gray-200 bg-white p-8 text-center text-gray-500 shadow-sm">
+              <p className="text-lg font-semibold text-gray-900">No hay videos disponibles</p>
+              <p className="mt-2 text-sm">Verifica más tarde o, si eres docente, sube el primero.</p>
+            </div>
+          ) : (
+            <div className="grid gap-6 xl:grid-cols-2">
+              {videos.map((video) => (
+                <div key={video.id} className="group overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+                  <div className="p-5">
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-utp-blue/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-utp-blue">
+                        {video.curso || 'General'}
+                      </span>
+                      {esRolControl && (
+                        <button
+                          type="button"
+                          onClick={() => manejarEliminacion(video.id)}
+                          className="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+                        >
+                          Eliminar
+                        </button>
+                      )}
                     </div>
-                    {esRolControl && (
-                      <button
-                        type="button"
-                        onClick={() => manejarEliminacion(video.id)}
-                        className="text-sm font-semibold text-utp-red hover:text-red-700"
-                      >
-                        Eliminar
-                      </button>
-                    )}
+                    <h3 className="text-xl font-bold text-gray-900">{video.titulo}</h3>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">Reproduce el contenido y crea dudas con timestamp para que otros estudiantes y docentes te respondan.</p>
                   </div>
-                    <div className="mt-3">
-                      <VideoPlayer
-                        key={`player-${video.id}`}
-                        video={video}
-                        url={`${URL_SERVIDOR}${video.archivo}`}
-                        registerRef={(id, refObj) => { playerRefs.current[id] = refObj; }}
-                        onCreateDoubt={async (titulo, tiempo) => {
-                          try {
-                            await apiService.crearTema({ titulo, video_id: video.id, timestamp: tiempo });
-                            setMensajeExito('Duda creada en el foro');
-                          } catch (err) {
-                            setMensajeError(err.message || 'No se pudo crear la duda');
-                          }
-                        }}
-                      />
+                  <button
+                    type="button"
+                    onClick={() => abrirVideoGrande(video)}
+                    className="group relative flex h-[220px] w-full items-center justify-center overflow-hidden rounded-b-[28px] bg-slate-950 text-white transition hover:bg-slate-900"
+                  >
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.14),transparent_40%)]" />
+                    <div className="absolute inset-0 bg-black/40" />
+                    <div className="relative z-10 flex flex-col items-center gap-3 px-6 text-center">
+                      <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-3xl text-white">
+                        ▶
+                      </span>
+                      <p className="text-lg font-semibold">Ver en grande</p>
+                      <p className="text-sm text-gray-200">Toque para abrir el reproductor en pantalla grande.</p>
                     </div>
+                  </button>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
+
+        <aside className="space-y-6">
+          {esRolControl && (
+            <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.18em] text-gray-500">Nuevo video</p>
+                  <h3 className="mt-2 text-xl font-bold text-gray-900">Sube tu clase</h3>
+                </div>
+                <span className="inline-flex rounded-full bg-utp-yellow/20 px-3 py-1 text-xs font-semibold text-utp-dark">+ Añadir</span>
+              </div>
+
+              <form onSubmit={manejarSubida} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Título del video</label>
+                  <input
+                    type="text"
+                    className="w-full rounded-3xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-utp-red focus:bg-white"
+                    value={tituloVideo}
+                    onChange={(evento) => setTituloVideo(evento.target.value)}
+                    placeholder="Ej. Física: Leyes de Newton"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Curso vinculado</label>
+                  <select
+                    className="w-full rounded-3xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-utp-red focus:bg-white"
+                    value={cursoSeleccionado}
+                    onChange={(evento) => setCursoSeleccionado(evento.target.value)}
+                  >
+                    {cursos.map((curso) => (
+                      <option key={curso.id} value={curso.id}>{curso.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Selecciona archivo</label>
+                  <div className="rounded-3xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-600">
+                    <input
+                      type="file"
+                      accept="video/mp4"
+                      className="w-full cursor-pointer text-sm text-gray-700 file:mr-4 file:rounded-full file:border-0 file:bg-utp-dark file:px-4 file:py-2 file:text-white"
+                      onChange={(evento) => setArchivoVideo(evento.target.files?.[0] || null)}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={cargando}
+                  className="btn btn-dark w-full disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {cargando ? 'Subiendo...' : 'Publicar video'}
+                </button>
+              </form>
+            </section>
+          )}
+
+          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+            <p className="text-sm uppercase tracking-[0.18em] text-gray-500">Instrucciones</p>
+            <h3 className="mt-2 text-xl font-bold text-gray-900">Crea dudas en tiempo real</h3>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Usa el botón "Crear duda en este tiempo" dentro del reproductor para abrir un tema en el foro con enlace directo al minuto exacto.
+            </p>
+            <div className="mt-5 grid gap-3 text-sm text-gray-700">
+              <div className="rounded-2xl bg-gray-50 px-4 py-3">1. Reproduce un video.</div>
+              <div className="rounded-2xl bg-gray-50 px-4 py-3">2. Pulsa el botón cuando tengas una pregunta.</div>
+              <div className="rounded-2xl bg-gray-50 px-4 py-3">3. Ve al foro y responde o elimina tus temas.</div>
+            </div>
+          </section>
+        </aside>
       </div>
+
+      {selectedVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 px-4 py-6 backdrop-blur-sm">
+          <div className="relative w-full max-w-5xl overflow-hidden rounded-[30px] bg-white shadow-2xl">
+            <div className="flex flex-col gap-4 border-b border-gray-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{selectedVideo.titulo}</h3>
+                <p className="text-sm text-gray-500">{selectedVideo.curso || 'General'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={cerrarVideoGrande}
+                className="btn btn-light"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="bg-slate-950 p-6">
+              <VideoPlayer
+                key={`modal-player-${selectedVideo.id}`}
+                video={selectedVideo}
+                url={`${URL_SERVIDOR}${selectedVideo.archivo}`}
+                autoPlay
+                registerRef={registerRef}
+                onCreateDoubt={async (titulo, tiempo) => {
+                  try {
+                    await apiService.crearTema({ titulo, video_id: selectedVideo.id, timestamp: tiempo, autor: usuarioActual?.nombre_completo || usuarioActual?.nombre });
+                    setMensajeExito('Duda creada en el foro');
+                  } catch (err) {
+                    setMensajeError(err.message || 'No se pudo crear la duda');
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-  function VideoPlayer({ video, url, onCreateDoubt, registerRef }) {
+  function VideoPlayer({ video, url, onCreateDoubt, registerRef, autoPlay }) {
     const refVideo = useRef(null);
     const intervaloRef = useRef(null);
     const [reproduciendo, setReproduciendo] = useState(false);
@@ -249,7 +337,7 @@ export default function Videos({ rolUsuario }) {
         if (intervaloRef.current) clearInterval(intervaloRef.current);
         if (registerRef && typeof registerRef === 'function') registerRef(video.id, null);
       };
-    }, []);
+    }, [registerRef, video.id]);
 
     const startPings = () => {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
@@ -275,22 +363,43 @@ export default function Videos({ rolUsuario }) {
       if (intervaloRef.current) clearInterval(intervaloRef.current);
     };
 
+    useEffect(() => {
+      if (!refVideo.current) return;
+      if (autoPlay) {
+        refVideo.current.play().catch(() => {});
+      }
+    }, [autoPlay]);
+
     const handleCreateDoubt = async () => {
       if (!refVideo.current) return;
       const tiempo = Math.floor(refVideo.current.currentTime || 0);
-      const titulo = window.prompt('Describe brevemente tu duda (se guardará el timestamp)', `Duda en ${tiempo}s sobre ${video.titulo}`);
+      const titulo = window.prompt('Describe tu duda', `Duda en ${tiempo}s sobre ${video.titulo}`);
       if (!titulo) return;
       await onCreateDoubt(titulo, tiempo);
     };
 
     return (
-      <div className="mt-2">
-        <video ref={refVideo} src={url} controls className="w-full rounded-md bg-black" onPlay={handlePlay} onPause={handlePause} onEnded={handlePause} />
-        <div className="mt-2 flex items-center justify-between">
-          <div className="text-sm text-gray-500">{reproduciendo ? 'Reproduciendo' : 'Pausado'}</div>
-          <div className="flex gap-2">
-            <button onClick={handleCreateDoubt} className="rounded-md bg-utp-yellow px-3 py-1 text-sm font-semibold">Crear duda en este tiempo</button>
+      <div className="relative overflow-hidden rounded-b-[28px] bg-slate-950">
+        <video
+          ref={refVideo}
+          src={url}
+          controls
+          className="h-[240px] w-full bg-black object-cover"
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onEnded={handlePause}
+        />
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 bg-gradient-to-t from-slate-950/90 to-transparent p-4 text-white">
+          <div className="flex items-center justify-between text-sm text-slate-200">
+            <span>{reproduciendo ? 'Reproduciendo' : 'Pausado'}</span>
+            <button
+              onClick={handleCreateDoubt}
+              className="rounded-full bg-utp-yellow px-3 py-1 text-xs font-semibold uppercase tracking-widest text-slate-950 shadow-sm transition hover:bg-yellow-300"
+            >
+              Crear duda
+            </button>
           </div>
+          <div className="text-xs text-slate-300">Guarda una duda con el minuto exacto para el foro.</div>
         </div>
       </div>
     );

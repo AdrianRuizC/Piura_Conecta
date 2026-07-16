@@ -35,7 +35,9 @@ export default function Descargas() {
                 <p className="font-semibold">{it.titulo || it.nombre}</p>
                 <p className="text-sm text-gray-500">{it.descripcion || ''}</p>
               </div>
-              <a href={`${URL_SERVIDOR}${it.ruta || it.archivo}`} target="_blank" rel="noreferrer" className="text-utp-red font-semibold">Descargar</a>
+              <a href={`${URL_SERVIDOR}${it.ruta || it.archivo}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+                Descargar
+              </a>
             </div>
           ))
         )}

@@ -7,23 +7,28 @@ export default function Usuarios() {
   const [form, setForm] = useState({ nombre_completo: '', usuario: '', contrasena: '', rol: 'estudiante', tenant_id: '' });
   const [error, setError] = useState('');
 
-  const usuario = (() => { try { return JSON.parse(localStorage.getItem('usuarioPiura') || 'null'); } catch { return null; } })();
-
-  const cargar = async () => {
-    setCargando(true);
-    try {
-      const datos = await apiService.obtenerUsuarios();
-      setLista(datos);
-      // cargar cursos para asignaciones
-      const cursos = await apiService.obtenerCursos();
-      setCursos(cursos || []);
-    } catch (e) {
-      setError(e.message || 'Error al cargar usuarios');
-    } finally { setCargando(false); }
-  };
+  const usuario = apiService.obtenerUsuario();
   const [cursos, setCursos] = useState([]);
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    let activo = true;
+    const cargar = async () => {
+      if (!activo) return;
+      setCargando(true);
+      try {
+        const datos = await apiService.obtenerUsuarios();
+        if (activo) setLista(datos);
+        const cursosResp = await apiService.obtenerCursos();
+        if (activo) setCursos(cursosResp || []);
+      } catch (e) {
+        if (activo) setError(e.message || 'Error al cargar usuarios');
+      } finally {
+        if (activo) setCargando(false);
+      }
+    };
+    cargar();
+    return () => { activo = false; };
+  }, []);
 
   const manejarCambio = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
 
@@ -82,7 +87,7 @@ export default function Usuarios() {
           return null;
         })()}
         <div className="md:col-span-4">
-          <button type="submit" className="mt-2 bg-utp-dark text-white px-4 py-2 rounded">Crear usuario</button>
+          <button type="submit" className="btn btn-dark mt-2">Crear usuario</button>
         </div>
       </form>
 
@@ -99,7 +104,7 @@ export default function Usuarios() {
                   <td className="p-2">{u.usuario}</td>
                   <td className="p-2">{u.rol}</td>
                   <td className="p-2">
-                    <button onClick={() => eliminar(u.id)} className="text-red-600 mr-3">Eliminar</button>
+                    <button onClick={() => eliminar(u.id)} className="btn btn-danger btn-sm mr-3">Eliminar</button>
                     {usuario && usuario.rol === 'profesor' && u.rol === 'estudiante' && (
                       <select onChange={(e) => asignar(u.id, Number(e.target.value))} defaultValue="" className="border p-1">
                         <option value="">Asignar curso</option>

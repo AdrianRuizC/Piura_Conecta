@@ -24,7 +24,7 @@ export default function Login({ alIniciarSesion }) {
         return;
       }
 
-      alIniciarSesion({ rol: 'estudiante', nombre: nombreEstudiante.trim() });
+      alIniciarSesion({ rol: 'estudiante', nombre: nombreEstudiante.trim(), nombre_completo: nombreEstudiante.trim() });
       return;
     }
 
@@ -37,7 +37,7 @@ export default function Login({ alIniciarSesion }) {
     try {
       const usuarioAuth = await apiService.login(usuarioProfesor.trim(), contrasena);
       // apiService.login guarda token y devuelve el objeto user
-      alIniciarSesion({ rol: usuarioAuth.rol, nombre: usuarioAuth.nombre_completo });
+      alIniciarSesion({ rol: usuarioAuth.rol, nombre: usuarioAuth.nombre_completo, nombre_completo: usuarioAuth.nombre_completo });
     } catch (error) {
       setMensajeError(error.message || 'Error de conexión con el servidor principal.');
     } finally {

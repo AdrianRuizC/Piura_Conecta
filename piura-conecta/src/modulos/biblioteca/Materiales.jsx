@@ -36,10 +36,6 @@ export default function Materiales({ rolUsuario }) {
     const fd = new FormData();
     fd.append('titulo', titulo.trim());
     fd.append('archivo', archivo);
-    // Debug: listar contenido del FormData
-    for (const pair of fd.entries()) {
-      console.log('formdata', pair[0], pair[1]);
-    }
 
     setCargando(true);
     try {
@@ -87,7 +83,7 @@ export default function Materiales({ rolUsuario }) {
               <label className="block text-sm font-medium text-gray-700 mb-2">Archivo (PDF)</label>
               <input type="file" accept="application/pdf" onChange={(e) => setArchivo(e.target.files?.[0] || null)} />
             </div>
-            <button disabled={cargando} className="rounded-xl bg-utp-dark text-white px-4 py-2">{cargando ? 'Subiendo...' : 'Subir material'}</button>
+            <button disabled={cargando} className="btn btn-dark w-full" type="submit">{cargando ? 'Subiendo...' : 'Subir material'}</button>
           </form>
         </section>
       )}
@@ -105,9 +101,9 @@ export default function Materiales({ rolUsuario }) {
                   <p className="text-sm text-gray-500">{mat.curso || ''}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <a href={`${URL_SERVIDOR}${mat.archivo}`} target="_blank" rel="noreferrer" className="text-utp-red font-semibold">Ver / Descargar</a>
+                  <a href={`${URL_SERVIDOR}${mat.archivo}`} target="_blank" rel="noreferrer" className="btn btn-light btn-sm">Ver / Descargar</a>
                   {esRolControl && (
-                    <button onClick={() => manejarEliminar(mat.id)} className="text-sm text-red-600">Eliminar</button>
+                    <button onClick={() => manejarEliminar(mat.id)} className="btn btn-danger btn-sm">Eliminar</button>
                   )}
                 </div>
               </div>

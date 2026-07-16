@@ -9,7 +9,6 @@ const setAuth = (token, usuario) => {
   if (token) localStorage.setItem(TOKEN_KEY, token);
   if (usuario) localStorage.setItem(USUARIO_KEY, JSON.stringify(usuario));
 };
-const clearAuth = () => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USUARIO_KEY); };
 
 const obtenerRolUsuario = () => {
   try {
@@ -249,6 +248,23 @@ export const apiService = {
     return r.json();
   },
 
+  eliminarRespuesta: async (temaId, respuestaId, data = null) => {
+    const options = {
+      method: 'DELETE',
+      headers: obtenerEncabezados(),
+    };
+    if (data) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(data);
+    }
+    const r = await fetch(`${URL_API}/foro/${temaId}/responder/${respuestaId}`, options);
+    if (!r.ok) {
+      let cuerpo; try { cuerpo = await r.json(); } catch { cuerpo = await r.text(); }
+      throw new Error(cuerpo?.error || String(cuerpo) || 'Error al eliminar respuesta');
+    }
+    return r.json();
+  },
+
   obtenerUsuario,
 
   crearTema: async (data) => {
@@ -269,9 +285,20 @@ export const apiService = {
     return r.json();
   },
 
-  eliminarTema: async (id) => {
-    const r = await fetch(`${URL_API}/foro/${id}`, { method: 'DELETE', headers: obtenerEncabezados() });
-    if (!r.ok) throw new Error('Error al eliminar tema');
+  eliminarTema: async (id, data = null) => {
+    const options = {
+      method: 'DELETE',
+      headers: obtenerEncabezados(),
+    };
+    if (data) {
+      options.headers['Content-Type'] = 'application/json';
+      options.body = JSON.stringify(data);
+    }
+    const r = await fetch(`${URL_API}/foro/${id}`, options);
+    if (!r.ok) {
+      let cuerpo; try { cuerpo = await r.json(); } catch { cuerpo = await r.text(); }
+      throw new Error(cuerpo?.error || String(cuerpo) || 'Error al eliminar tema');
+    }
     return r.json();
   },
 
