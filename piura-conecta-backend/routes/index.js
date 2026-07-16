@@ -8,7 +8,7 @@ const { cargaVideos, cargaMateriales } = require('../utils/storage');
 const { validarRolControl, verificarToken } = require('../middleware/auth');
 const { JWT_SECRET } = require('../config/env');
 
-const registrarRutas = (aplicacion) => {
+const registrarRutas = (aplicacion, io = null) => {
   aplicacion.get('/api/health', (_peticion, respuesta) => {
     respuesta.json({ estado: 'ok' });
   });
@@ -230,7 +230,15 @@ const registrarRutas = (aplicacion) => {
 
   aplicacion.get('/api/foro', async (_peticion, respuesta) => {
     try {
-      const { rows } = await pool.query('SELECT id, titulo, autor, fecha FROM foro ORDER BY id DESC');
+      let rows;
+      try {
+        const res = await pool.query('SELECT id, titulo, autor, fecha, video_id, timestamp FROM foro ORDER BY id DESC');
+        rows = res.rows;
+      } catch (qerr) {
+        // fallback for older schema
+        const res2 = await pool.query('SELECT id, titulo, autor, fecha FROM foro ORDER BY id DESC');
+        rows = res2.rows.map(r => ({ ...r, video_id: null, timestamp: null }));
+      }
       respuesta.json(rows);
     } catch (error) {
       console.error(error);
@@ -238,20 +246,91 @@ const registrarRutas = (aplicacion) => {
     }
   });
 
-  aplicacion.post('/api/foro', validarRolControl, async (peticion, respuesta) => {
+  // Obtener un tema con sus respuestas
+  aplicacion.get('/api/foro/:id', async (peticion, respuesta) => {
     try {
-      const { titulo, autor } = peticion.body;
-      const { rows } = await pool.query('INSERT INTO foro (titulo, autor) VALUES ($1, $2) RETURNING *', [titulo, autor || null]);
-      respuesta.status(201).json(rows[0]);
+      const { id } = peticion.params;
+      const temaRes = await pool.query('SELECT id, titulo, autor, fecha, video_id, timestamp FROM foro WHERE id = $1', [id]);
+      if (temaRes.rows.length === 0) return respuesta.status(404).json({ error: 'No encontrado' });
+      const tema = temaRes.rows[0];
+      let replies = [];
+      try {
+        const r = await pool.query('SELECT id, foro_id, autor, contenido, creado_at FROM foro_respuestas WHERE foro_id = $1 ORDER BY creado_at ASC', [id]);
+        replies = r.rows;
+      } catch (qerr) {
+        // fallback: empty replies if table missing
+        replies = [];
+      }
+      respuesta.json({ tema, replies });
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: 'Error al obtener tema' });
+    }
+  });
+
+  aplicacion.post('/api/foro', verificarToken, async (peticion, respuesta) => {
+    try {
+      const { titulo, video_id, timestamp } = peticion.body;
+      const autor = (peticion.user && peticion.user.nombre_completo) || peticion.body.autor || null;
+      // try to store video context if schema supports it
+      try {
+        const { rows } = await pool.query('INSERT INTO foro (titulo, autor, video_id, timestamp) VALUES ($1, $2, $3, $4) RETURNING *', [titulo, autor || null, video_id || null, timestamp || null]);
+        const created = rows[0];
+        if (io) io.emit('foro:nuevo', created);
+        return respuesta.status(201).json(created);
+      } catch (qerr) {
+        if (qerr.code === '42703') {
+          const { rows } = await pool.query('INSERT INTO foro (titulo, autor) VALUES ($1, $2) RETURNING *', [titulo, autor || null]);
+          const created = rows[0];
+          const meta = { ...created, video_id: video_id || null, timestamp: timestamp || null };
+          if (io) io.emit('foro:nuevo', meta);
+          return respuesta.status(201).json(meta);
+        }
+        throw qerr;
+      }
     } catch (error) {
       console.error(error);
       respuesta.status(500).json({ error: error.message || 'Error al crear tema' });
     }
   });
 
-  aplicacion.delete('/api/foro/:id', validarRolControl, async (peticion, respuesta) => {
+  // Responder un tema del foro y notificar via socket
+  aplicacion.post('/api/foro/:id/responder', verificarToken, async (peticion, respuesta) => {
     try {
       const { id } = peticion.params;
+      const { contenido } = peticion.body;
+      const autor = (peticion.user && peticion.user.nombre_completo) || peticion.body.autor || null;
+      try {
+        const { rows } = await pool.query('INSERT INTO foro_respuestas (foro_id, autor, contenido) VALUES ($1,$2,$3) RETURNING *', [id, autor || null, contenido || null]);
+        const created = rows[0];
+        if (io) io.emit('foro:respuesta', { foroId: Number(id), respuesta: created });
+        return respuesta.status(201).json(created);
+      } catch (qerr) {
+        if (qerr.code === '42P01' || qerr.code === '42703') {
+          // fallback: store in generic foro_replies if schema different, or just return the content
+          const created = { id: null, foro_id: Number(id), autor: autor || null, contenido: contenido || null, creado_at: new Date().toISOString() };
+          if (io) io.emit('foro:respuesta', { foroId: Number(id), respuesta: created });
+          return respuesta.status(201).json(created);
+        }
+        throw qerr;
+      }
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: 'Error al crear respuesta' });
+    }
+  });
+
+  aplicacion.delete('/api/foro/:id', verificarToken, async (peticion, respuesta) => {
+    try {
+      const { id } = peticion.params;
+      // check ownership or role
+      const temaRes = await pool.query('SELECT id, titulo, autor FROM foro WHERE id = $1', [id]);
+      if (temaRes.rows.length === 0) return respuesta.status(404).json({ error: 'No encontrado' });
+      const tema = temaRes.rows[0];
+      const actor = peticion.user || null;
+      const esControl = actor && (actor.rol === 'admin' || actor.rol === 'profesor');
+      const esAutor = actor && tema.autor && String(tema.autor) === String(actor.nombre_completo);
+      if (!esControl && !esAutor) return respuesta.status(403).json({ error: 'No autorizado' });
       await pool.query('DELETE FROM foro WHERE id = $1', [id]);
       respuesta.json({ mensaje: 'Tema eliminado' });
     } catch (error) {
@@ -510,6 +589,120 @@ const registrarRutas = (aplicacion) => {
     } catch (error) {
       console.error(error);
       respuesta.status(500).json({ error: 'Error al obtener métricas' });
+    }
+  });
+
+  // Guardar progreso periódico (upsert)
+  aplicacion.post('/api/progreso', verificarToken, async (peticion, respuesta) => {
+    try {
+      const usuario = peticion.user;
+      const { video_id, tiempo_segundos } = peticion.body;
+      const usuarioId = usuario && usuario.id ? usuario.id : (peticion.body.usuario_id ? Number(peticion.body.usuario_id) : null);
+      if (!usuarioId || !video_id) return respuesta.status(400).json({ error: 'Falta usuario o video_id' });
+
+      try {
+        await pool.query(
+          `INSERT INTO progreso (usuario_id, video_id, tiempo_segundos, actualizado_at) VALUES ($1,$2,$3,now())
+           ON CONFLICT (usuario_id, video_id) DO UPDATE SET tiempo_segundos = $3, actualizado_at = now()`
+          , [usuarioId, video_id, Number(tiempo_segundos || 0)]
+        );
+        return respuesta.json({ ok: true });
+      } catch (qerr) {
+        if (qerr.code === '42703' || qerr.code === '42P01') {
+          await pool.query('INSERT INTO progreso (usuario_id, video_id, tiempo_segundos) VALUES ($1,$2,$3)', [usuarioId, video_id, Number(tiempo_segundos || 0)]);
+          return respuesta.json({ ok: true });
+        }
+        throw qerr;
+      }
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: 'Error al guardar progreso' });
+    }
+  });
+
+  // Crear attempt parcial para examen
+  aplicacion.post('/api/examenes/:id/attempts', verificarToken, async (peticion, respuesta) => {
+    try {
+      const examenId = Number(peticion.params.id);
+      const usuario = peticion.user || null;
+      const usuarioId = usuario ? usuario.id : (peticion.body.alumno_id ? Number(peticion.body.alumno_id) : null);
+      if (!usuarioId) return respuesta.status(401).json({ error: 'No autenticado' });
+      const { rows } = await pool.query('INSERT INTO examen_submissions (examen_id, alumno_id, respuestas, estado, creado_at) VALUES ($1,$2,$3,$4,now()) RETURNING id', [examenId, usuarioId, JSON.stringify({}), 'en_progreso']);
+      respuesta.status(201).json({ submissionId: rows[0].id });
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: 'Error al iniciar attempt' });
+    }
+  });
+
+  // Responder una pregunta dentro de un attempt (validación por pregunta)
+  aplicacion.post('/api/examenes/:id/attempts/:submissionId/question/:questionId', verificarToken, async (peticion, respuesta) => {
+    try {
+      const examenId = Number(peticion.params.id);
+      const submissionId = Number(peticion.params.submissionId);
+      const questionId = peticion.params.questionId;
+      const { respuesta: answer } = peticion.body;
+
+      const exRes = await pool.query('SELECT id, tipo, contenido FROM examenes WHERE id = $1', [examenId]);
+      if (exRes.rows.length === 0) return respuesta.status(404).json({ error: 'Examen no existe' });
+      const examen = exRes.rows[0];
+      if (examen.tipo !== 'quiz') return respuesta.status(400).json({ error: 'No es un examen tipo quiz' });
+      const contenido = typeof examen.contenido === 'string' ? JSON.parse(examen.contenido) : (examen.contenido || {});
+      const preguntas = contenido.preguntas || [];
+      const pregunta = preguntas.find(p => String(p.id) === String(questionId));
+      if (!pregunta) return respuesta.status(404).json({ error: 'Pregunta no encontrada' });
+
+      const correcta = pregunta.correcta;
+      const esCorrecta = String(answer) === String(correcta);
+
+      const subRes = await pool.query('SELECT id, respuestas FROM examen_submissions WHERE id = $1 AND examen_id = $2', [submissionId, examenId]);
+      if (subRes.rows.length === 0) return respuesta.status(404).json({ error: 'Submission no encontrada' });
+      let respuestas = {};
+      try { respuestas = subRes.rows[0].respuestas ? JSON.parse(subRes.rows[0].respuestas) : {}; } catch (e) { respuestas = {}; }
+      respuestas[questionId] = { given: answer, correct: esCorrecta };
+      await pool.query('UPDATE examen_submissions SET respuestas = $1 WHERE id = $2', [JSON.stringify(respuestas), submissionId]);
+
+      const hint = (!esCorrecta && pregunta.hint) ? pregunta.hint : null;
+      return respuesta.json({ correct: esCorrecta, correcta, hint });
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: 'Error al validar pregunta' });
+    }
+  });
+
+  // Métricas: racha de días seguidos y horas vistas
+  aplicacion.get('/api/metrics/dashboard', async (peticion, respuesta) => {
+    try {
+      const usuarioId = peticion.query.user_id ? Number(peticion.query.user_id) : (peticion.user && peticion.user.id) || null;
+      if (!usuarioId) return respuesta.status(400).json({ error: 'Falta user_id' });
+
+      const diasRes = await pool.query(`SELECT DISTINCT date_trunc('day', coalesce(actualizado_at, creado_at, now()))::date as dia FROM progreso WHERE usuario_id = $1 ORDER BY dia DESC`, [usuarioId]);
+      const dias = diasRes.rows.map(r => r.dia);
+      let racha = 0;
+      const hoy = new Date();
+      const hoyYmd = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate()));
+      for (let i = 0; i < dias.length; i++) {
+        const d = new Date(dias[i]);
+        const expected = new Date(hoyYmd);
+        expected.setUTCDate(hoyYmd.getUTCDate() - racha);
+        if (d.toISOString().slice(0,10) === expected.toISOString().slice(0,10)) {
+          racha++;
+        } else break;
+      }
+
+      let tiempoTotalSec = 0;
+      try {
+        const tRes = await pool.query('SELECT sum(coalesce(tiempo_segundos,0))::int as total FROM progreso WHERE usuario_id = $1', [usuarioId]);
+        tiempoTotalSec = Number((tRes.rows[0] && tRes.rows[0].total) || 0);
+      } catch (err) {
+        tiempoTotalSec = 0;
+      }
+
+      const horas = Math.round((tiempoTotalSec / 3600) * 100) / 100;
+      respuesta.json({ streak_days: racha, hours_watched: horas });
+    } catch (error) {
+      console.error(error);
+      respuesta.status(500).json({ error: 'Error al calcular métricas' });
     }
   });
 };

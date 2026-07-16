@@ -21,6 +21,16 @@ const obtenerRolUsuario = () => {
   }
 };
 
+const obtenerUsuario = () => {
+  try {
+    const almacenamiento = localStorage.getItem(USUARIO_KEY);
+    if (!almacenamiento) return null;
+    return JSON.parse(almacenamiento);
+  } catch {
+    return null;
+  }
+};
+
 const obtenerEncabezados = (json = true) => {
   const headers = {};
   if (json) headers['Content-Type'] = 'application/json';
@@ -224,11 +234,37 @@ export const apiService = {
     return respuesta.json();
   },
 
+  obtenerTema: async (id) => {
+    const r = await fetch(`${URL_API}/foro/${id}`, { headers: obtenerEncabezados() });
+    if (!r.ok) throw new Error('Error al obtener tema');
+    return r.json();
+  },
+
+  crearRespuesta: async (temaId, data) => {
+    const r = await fetch(`${URL_API}/foro/${temaId}/responder`, { method: 'POST', headers: obtenerEncabezados(), body: JSON.stringify(data) });
+    if (!r.ok) {
+      let cuerpo; try { cuerpo = await r.json(); } catch { cuerpo = await r.text(); }
+      throw new Error(cuerpo?.error || String(cuerpo) || 'Error al crear respuesta');
+    }
+    return r.json();
+  },
+
+  obtenerUsuario,
+
   crearTema: async (data) => {
     const r = await fetch(`${URL_API}/foro`, { method: 'POST', headers: obtenerEncabezados(), body: JSON.stringify(data) });
     if (!r.ok) {
       let cuerpo; try { cuerpo = await r.json(); } catch { cuerpo = await r.text(); }
       throw new Error(cuerpo?.error || cuerpo?.message || String(cuerpo) || 'Error al crear tema');
+    }
+    return r.json();
+  },
+
+  postProgreso: async (video_id, tiempo_segundos) => {
+    const r = await fetch(`${URL_API}/progreso`, { method: 'POST', headers: obtenerEncabezados(), body: JSON.stringify({ video_id, tiempo_segundos }) });
+    if (!r.ok) {
+      let cuerpo; try { cuerpo = await r.json(); } catch { cuerpo = await r.text(); }
+      throw new Error(cuerpo?.error || String(cuerpo) || 'Error al enviar progreso');
     }
     return r.json();
   },

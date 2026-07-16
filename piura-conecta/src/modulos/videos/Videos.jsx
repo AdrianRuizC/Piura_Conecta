@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { apiService, URL_SERVIDOR } from '../../servicios/api';
 
 export default function Videos({ rolUsuario }) {
@@ -35,6 +35,24 @@ export default function Videos({ rolUsuario }) {
     })();
     return () => { activo = false; };
   }, [esRolControl]);
+
+  // refs registry for player instances to support seeking from foro
+  const playerRefs = useRef({});
+  useEffect(() => {
+    const handler = (ev) => {
+      try {
+        const detail = ev.detail || {};
+        const { video_id, timestamp } = detail;
+        const vref = playerRefs.current && playerRefs.current[video_id];
+        if (vref && vref.current) {
+          vref.current.currentTime = Number(timestamp || 0);
+          vref.current.play().catch(() => {});
+        }
+      } catch (e) { console.debug('seek event', e); }
+    };
+    window.addEventListener('piura:seek', handler);
+    return () => window.removeEventListener('piura:seek', handler);
+  }, []);
 
   const manejarSubida = async (evento) => {
     evento.preventDefault();
@@ -193,14 +211,22 @@ export default function Videos({ rolUsuario }) {
                       </button>
                     )}
                   </div>
-                  <a
-                    href={`${URL_SERVIDOR}${video.archivo}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex text-sm font-semibold text-utp-red"
-                  >
-                    Ver video
-                  </a>
+                    <div className="mt-3">
+                      <VideoPlayer
+                        key={`player-${video.id}`}
+                        video={video}
+                        url={`${URL_SERVIDOR}${video.archivo}`}
+                        registerRef={(id, refObj) => { playerRefs.current[id] = refObj; }}
+                        onCreateDoubt={async (titulo, tiempo) => {
+                          try {
+                            await apiService.crearTema({ titulo, video_id: video.id, timestamp: tiempo });
+                            setMensajeExito('Duda creada en el foro');
+                          } catch (err) {
+                            setMensajeError(err.message || 'No se pudo crear la duda');
+                          }
+                        }}
+                      />
+                    </div>
                 </div>
               ))
             )}
@@ -210,3 +236,62 @@ export default function Videos({ rolUsuario }) {
     </div>
   );
 }
+
+  function VideoPlayer({ video, url, onCreateDoubt, registerRef }) {
+    const refVideo = useRef(null);
+    const intervaloRef = useRef(null);
+    const [reproduciendo, setReproduciendo] = useState(false);
+
+    useEffect(() => {
+      // register ref for parent (for seeking), and cleanup
+      if (registerRef && typeof registerRef === 'function') registerRef(video.id, refVideo);
+      return () => {
+        if (intervaloRef.current) clearInterval(intervaloRef.current);
+        if (registerRef && typeof registerRef === 'function') registerRef(video.id, null);
+      };
+    }, []);
+
+    const startPings = () => {
+      if (intervaloRef.current) clearInterval(intervaloRef.current);
+      intervaloRef.current = setInterval(async () => {
+        if (!refVideo.current) return;
+        const tiempo = Math.floor(refVideo.current.currentTime || 0);
+        try {
+          await apiService.postProgreso(video.id, tiempo);
+        } catch (err) {
+          // no interrumpir la reproducción por errores en progreso
+          console.debug('progreso error', err.message || err);
+        }
+      }, 10000);
+    };
+
+    const handlePlay = () => {
+      setReproduciendo(true);
+      startPings();
+    };
+
+    const handlePause = () => {
+      setReproduciendo(false);
+      if (intervaloRef.current) clearInterval(intervaloRef.current);
+    };
+
+    const handleCreateDoubt = async () => {
+      if (!refVideo.current) return;
+      const tiempo = Math.floor(refVideo.current.currentTime || 0);
+      const titulo = window.prompt('Describe brevemente tu duda (se guardará el timestamp)', `Duda en ${tiempo}s sobre ${video.titulo}`);
+      if (!titulo) return;
+      await onCreateDoubt(titulo, tiempo);
+    };
+
+    return (
+      <div className="mt-2">
+        <video ref={refVideo} src={url} controls className="w-full rounded-md bg-black" onPlay={handlePlay} onPause={handlePause} onEnded={handlePause} />
+        <div className="mt-2 flex items-center justify-between">
+          <div className="text-sm text-gray-500">{reproduciendo ? 'Reproduciendo' : 'Pausado'}</div>
+          <div className="flex gap-2">
+            <button onClick={handleCreateDoubt} className="rounded-md bg-utp-yellow px-3 py-1 text-sm font-semibold">Crear duda en este tiempo</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
