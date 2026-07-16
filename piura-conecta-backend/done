@@ -1,7 +1,0 @@
-       conname        |                                            pg_get_constraintdef                                            
-----------------------+------------------------------------------------------------------------------------------------------------
- usuarios_rol_check   | CHECK (((rol)::text = ANY ((ARRAY['estudiante'::character varying, 'admin'::character varying])::text[])))
- usuarios_pkey        | PRIMARY KEY (id)
- usuarios_usuario_key | UNIQUE (usuario)
-(3 filas)
-
